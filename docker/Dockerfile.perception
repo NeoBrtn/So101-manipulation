@@ -1,0 +1,15 @@
+# PERCEPTION image: ROS 2 Jazzy + OpenCV (lean: no sim, no arm driver).
+# Phase 2 will add its detector here (e.g. ultralytics for YOLO).
+FROM ros:jazzy-ros-base
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    ros-jazzy-tf2-ros \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --break-system-packages --no-cache-dir "numpy<2" "opencv-python-headless==4.10.*"
+
+WORKDIR /ros2_ws
+CMD ["bash", "-lc", "source /opt/ros/jazzy/setup.bash && bash"]

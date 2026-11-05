@@ -1,0 +1,5 @@
+# Move the gripper to a 3D position (robot/world frame) via IK.
+geometry_msgs/PoseStamped target_pose
+---
+bool success
+string message

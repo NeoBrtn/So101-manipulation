@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "so101-core"
+version = "0.1.0"
+description = "Minimal Feetech/SO-ARM101 driver (extracted from LeRobot, Apache-2.0) — Tek5 Epitech module"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "draccus",
+    "pyserial",
+    "feetech-servo-sdk",
+    "tqdm",
+    "deepdiff",
+    "opencv-python-headless",
+]
+
+[project.optional-dependencies]
+sim = ["mujoco>=3.0"]
+
+[tool.setuptools.packages.find]
+include = ["lerobot*"]

@@ -1,0 +1,16 @@
+# Phase 2 parameters (values to be measured on the real setup). See docs/phase2_decap.md.
+decap:
+  ros__parameters:
+    min_reach: 0.12
+    max_reach: 0.34
+    move_threshold: 0.015
+    stale_timeout: 1.0
+    neck_grasp_height: 0.0     # m, TCP height on the neck, just below the cap
+    cap_grasp_height: 0.0      # m
+    fixture_pose: [0.0, 0.0, 0.0]
+    cap_box_pose: [0.0, 0.0, 0.0]
+    bottle_box_pose: [0.0, 0.0, 0.0]
+    unscrew_angle: 1.2         # rad of wrist_roll per regrasp step
+    unscrew_lift: 0.001        # m per step (thread pitch)
+    max_unscrew_steps: 8
+    max_retries: 3

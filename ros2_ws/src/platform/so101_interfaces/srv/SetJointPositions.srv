@@ -1,0 +1,7 @@
+# Set the 6 joints of the SO-ARM101 at once.
+# Order: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper
+# Units: degrees for the 5 arm joints, 0-100 (%) for the gripper.
+float64[] positions
+---
+bool success
+string message

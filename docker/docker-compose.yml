@@ -1,0 +1,93 @@
+# SO-101 stack: three containers on one ROS 2 (DDS) network.
+#
+#   cp .env.example .env              # once, then edit it (task, sim or real arm)
+#   xhost +local:docker               # once per session, for RViz / the MuJoCo viewer
+#   docker compose up -d              # control + perception + viz
+#   ../scripts/rviz.sh                # RViz, inside the control container
+#
+#   control     builds the workspace, runs the driver, motion server and the task
+#   perception  the task's perception nodes (waits for the build)
+#   viz         robot_state_publisher: /robot_description and the arm TFs
+
+name: so101
+
+x-ros-env: &ros-env
+  ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+  FASTDDS_BUILTIN_TRANSPORTS: LARGE_DATA
+  TASK: ${TASK:-pick_place}
+  USE_SIM: ${USE_SIM:-true}
+
+services:
+  control:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.control
+    image: so101/control
+    init: true
+    environment:
+      <<: *ros-env
+      REAL_ROBOT_PORT: ${REAL_ROBOT_PORT:-/dev/ttyACM0}
+      PASSIVE: ${PASSIVE:-false}
+      SIM_VIEWER: ${SIM_VIEWER:-false}
+      CAMERA_URL: ${CAMERA_URL:-}
+      MARKER_XY: ${MARKER_XY:-}
+      MARKER_SIZE: ${MARKER_SIZE:-0.10}
+      MUJOCO_GL: osmesa
+      DISPLAY: ${DISPLAY:-}
+      QT_QPA_PLATFORM: xcb
+    device_cgroup_rules:   # USB serial devices (real arm)
+      - 'c 166:* rmw'
+      - 'c 188:* rmw'
+    volumes:
+      - ../ros2_ws:/ros2_ws
+      - ../sim:/opt/so101/sim
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./entrypoint.sh:/opt/so101/entrypoint.sh:ro
+      - ${CALIBRATION_FILE:-/dev/null}:/calibration/arm.json:ro
+    networks: [rosnet]
+    stdin_open: true
+    tty: true
+    # Only container that builds (concurrent colcon builds on one volume conflict)
+    command: ["/opt/so101/entrypoint.sh"]
+
+  perception:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.perception
+    image: so101/perception
+    init: true
+    environment: *ros-env
+    volumes:
+      - ../ros2_ws:/ros2_ws
+    networks: [rosnet]
+    command:
+      - bash
+      - -c
+      - >-
+        cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
+        until [ -f install/so101_bringup/share/so101_bringup/package.xml ]; do
+        echo 'waiting for the build (control)...'; sleep 2; done &&
+        source install/setup.bash &&
+        exec ros2 launch so101_bringup perception.launch.py task:=$${TASK} use_sim:=$${USE_SIM}
+
+  viz:
+    image: so101/control
+    init: true
+    environment: *ros-env
+    volumes:
+      - ../ros2_ws:/ros2_ws
+    networks: [rosnet]
+    depends_on: [control]
+    command:
+      - bash
+      - -c
+      - >-
+        cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
+        until [ -f install/so101_description/share/so101_description/launch/viz.launch.py ]; do
+        echo 'waiting for the build (control)...'; sleep 2; done &&
+        source install/setup.bash &&
+        exec ros2 launch so101_description viz.launch.py
+
+networks:
+  rosnet:
+    driver: bridge

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>so101_pick_place</name>
+  <version>1.0.0</version>
+  <description>Phase 1: detect a red cube with a fixed camera, pick it and drop it in a box.</description>
+  <maintainer email="neo.burtin@epitech.eu">neo</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>so101_manipulation</depend>
+  <depend>so101_vision</depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

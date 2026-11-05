@@ -1,0 +1,31 @@
+# CONTROL image: ROS 2 Jazzy + SO-101 driver (real arm + MuJoCo sim) + Pinocchio + RViz
+FROM ros:jazzy-ros-base
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    MUJOCO_GL=osmesa \
+    PYOPENGL_PLATFORM=osmesa \
+    LIBGL_ALWAYS_SOFTWARE=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip \
+    python3-pytest \
+    python3-scipy \
+    libosmesa6 \
+    libgl1 \
+    libgl1-mesa-dri \
+    ros-jazzy-tf2-ros \
+    ros-jazzy-robot-state-publisher \
+    ros-jazzy-joint-state-publisher \
+    ros-jazzy-rviz2 \
+    ros-jazzy-pinocchio \
+    && rm -rf /var/lib/apt/lists/*
+
+# Real-arm driver (vendored from LeRobot) and the MuJoCo digital twin
+COPY third_party/lerobot_min /opt/so101/lerobot_min
+COPY sim /opt/so101/sim
+RUN pip install --break-system-packages --no-cache-dir \
+    "numpy<2" "opencv-python-headless==4.10.*" /opt/so101/lerobot_min /opt/so101/sim
+
+# The ROS 2 workspace is mounted as a volume (see docker-compose.yml)
+WORKDIR /ros2_ws
+CMD ["bash", "-lc", "source /opt/ros/jazzy/setup.bash && bash"]

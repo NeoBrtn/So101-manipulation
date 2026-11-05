@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "so101-sim"
+version = "0.1.0"
+description = "MuJoCo digital twin of the SO-ARM101 — same API as SO101Follower"
+requires-python = ">=3.10"
+dependencies = ["mujoco>=3.0", "numpy"]
+
+[tool.setuptools.packages.find]
+include = ["so101_sim*"]
+
+[tool.setuptools.package-data]
+so101_sim = ["assets/so101/*", "assets/so101/assets/*"]

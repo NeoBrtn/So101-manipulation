@@ -1,0 +1,13 @@
+# Lint configuration only (the ROS packages are built by colcon).
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["third_party", "ros2_ws/build", "ros2_ws/install"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E741", "B905"]   # zip() over ROS message fields is lenient on purpose
+
+[tool.ruff.lint.isort]
+known-first-party = ["so101_bringup", "so101_driver", "so101_manipulation", "so101_vision",
+                     "so101_pick_place", "so101_decap", "so101_sim", "so101_interfaces"]

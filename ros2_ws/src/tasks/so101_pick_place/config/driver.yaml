@@ -1,0 +1,9 @@
+# so101_driver settings for this task (read by so101_bringup).
+# Simulation: default scene (scene_tek5.xml: arm, red cube, drop box, external camera).
+so101_driver:
+  ros__parameters:
+    scene: ""
+    camera_name: external_cam
+    camera_width: 320
+    camera_height: 240
+    camera_hz: 10.0

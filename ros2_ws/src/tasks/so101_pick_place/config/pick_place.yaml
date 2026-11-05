@@ -1,0 +1,33 @@
+# Phase 1 parameters. Heights are TCP heights above the table (m).
+pick_place:
+  ros__parameters:
+    continuous: false          # true: pick every cube that shows up, no trigger needed
+    home_on_start: true        # fold to the rest pose at startup
+    min_reach: 0.12            # m, horizontal base -> cube
+    max_reach: 0.34
+    grasp_height: 0.02         # cube centre at 0.025
+    pregrasp_height: 0.08
+    lift_height: 0.11
+    drop_height: 0.11
+    move_threshold: 0.015      # m: cube moved -> cancel and replan
+    stale_timeout: 1.0         # s: older detections are not "fresh"
+    wait_timeout: 10.0         # s without a cube after a trigger -> failure
+    verify_timeout: 1.5        # s to see the cube again at pre-grasp
+    grasp_if_unseen: true      # gripper hides the cube at pre-grasp: trust the last estimate
+    confirm_delay: 1.5         # s at rest before checking the result
+    confirm_timeout: 5.0
+    box_half_size: 0.05        # m, inner half-width of the drop box
+    max_retries: 3
+
+perception:
+  ros__parameters:
+    camera: external_cam
+    publish_hz: 10.0
+    # OpenCV HSV (H 0-180), groups of 6: low h s v, high h s v.
+    # Red wraps around 0/180: two ranges. Printed PLA ~ H 168, S 185 on the real camera.
+    cube_hsv: [0, 120, 50, 6, 255, 255, 160, 120, 50, 180, 255, 255]
+    box_hsv: [7, 80, 25, 25, 255, 200]   # brown box (sim rgba 0.35 0.20 0.12)
+    min_blob_area: 15                    # px
+    cube_size: 0.05
+    box_size: [0.10, 0.10, 0.05]
+    publish_debug_image: true

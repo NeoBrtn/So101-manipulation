@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>so101_decap</name>
+  <version>0.1.0</version>
+  <description>Phase 2 (design stage): detect a bottle, lock it in a fixture, unscrew its cap, sort cap and bottle.</description>
+  <maintainer email="neo.burtin@epitech.eu">neo</maintainer>
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>so101_manipulation</depend>
+  <depend>so101_vision</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
