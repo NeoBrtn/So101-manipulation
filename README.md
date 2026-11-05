@@ -3,12 +3,15 @@
 **ROS 2 platform for the SO-101 robot arm: one stack for the MuJoCo digital twin and
 the real arm, with camera-guided manipulation projects built on top of it.**
 
-<!-- TODO: demo GIF / video (sim + real arm), e.g. docs/media/pick_place.gif -->
-
 [![CI](https://github.com/NeoBrtn/So101-manipulation/actions/workflows/ci.yml/badge.svg)](https://github.com/NeoBrtn/So101-manipulation/actions/workflows/ci.yml)
 ![ROS 2 Jazzy](https://img.shields.io/badge/ROS%202-Jazzy-22314E)
 ![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+
+<p align="center">
+  <img src="docs/media/pick_place_sim.gif" alt="Pick & place in the MuJoCo simulation: the arm picks the red cube and drops it in the box" width="600">
+  <br><em>Phase 1, pick &amp; place in the MuJoCo digital twin (camera-guided, no ground truth in the loop)</em>
+</p>
 
 | | Project | Status |
 |---|---|---|
@@ -99,7 +102,6 @@ ros2 topic echo /pick_place/result
 ros2 service call /go_to_target so101_interfaces/srv/GoToTarget \
   "{target_pose: {pose: {position: {x: 0.25, y: 0.0, z: 0.05}}}}"
 ```
-
 
 ## Tests
 

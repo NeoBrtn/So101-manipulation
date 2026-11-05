@@ -6,6 +6,8 @@ moved during the approach.
 
 Package: [`ros2_ws/src/tasks/so101_pick_place`](../ros2_ws/src/tasks/so101_pick_place)
 
+![Pick & place in the MuJoCo simulation](media/pick_place_sim.gif)
+
 ```
  camera ──► perception ──/object_position──────► pick_place ──/joint_command──► driver
                         ──/drop_box_position──►     ▲                              │
