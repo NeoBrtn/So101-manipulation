@@ -3,25 +3,34 @@
 #   starts the stack if needed (TASK=pick_place, USE_SIM=true), puts the cube at a new
 #   random pose, triggers /pick_and_place and waits for the result.
 #
-# Usage: scripts/pick_place_demo.sh [--keep] [--rviz] [--runs N]
+# Usage: scripts/pick_place_demo.sh [--keep] [--rviz] [--viewer] [--runs N]
 #   --keep    keep the cube where it is (no new random pose)
 #   --rviz    open RViz
+#   --viewer  live MuJoCo window (restarts the stack with it)
 #   --runs N  repeat N times and print the success rate
 set -uo pipefail
 cd "$(dirname "$0")/../docker" || exit 1
 
-keep=false; rviz=false; runs=1
+keep=false; rviz=false; viewer=false; runs=1
 while [ $# -gt 0 ]; do
   case $1 in
     --keep) keep=true ;;
     --rviz) rviz=true ;;
+    --viewer) viewer=true ;;
     --runs) runs=$2; shift ;;
-    *) echo "usage: $0 [--keep] [--rviz] [--runs N]"; exit 2 ;;
+    *) echo "usage: $0 [--keep] [--rviz] [--viewer] [--runs N]"; exit 2 ;;
   esac
   shift
 done
 
 export TASK=pick_place USE_SIM=true
+if $viewer; then
+  export SIM_VIEWER=true
+  xhost +local:docker >/dev/null 2>&1 || true
+else   # keep the running stack's setting (e.g. started by scripts/sim.sh): no restart
+  running=$(docker compose exec -T control printenv SIM_VIEWER 2>/dev/null)
+  [ -n "$running" ] && export SIM_VIEWER=$running
+fi
 ros() { docker compose exec -T control bash -lc "source /ros2_ws/install/setup.bash && $*"; }
 # A short-lived CLI client sometimes misses the service response (DDS discovery race):
 # time out and retry instead of hanging
