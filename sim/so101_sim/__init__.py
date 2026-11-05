@@ -70,6 +70,8 @@ class SO101Sim:
         g_jnt = self.model.joint(GRIPPER)
         self._gripper_range = (float(g_jnt.range[0]), float(g_jnt.range[1]))
 
+        self._setup_screws()
+        self._setup_grip_assist()
         mujoco.mj_forward(self.model, self.data)
         self.randomize_object()
         self._connected = True
@@ -125,7 +127,11 @@ class SO101Sim:
         return self._renderer.render()
 
     def randomize_object(self, radius_range=(0.18, 0.30), angle_range_deg=(-50, 60)) -> None:
-        """Moves pickup_object to a reachable position, with a random yaw."""
+        """Moves pickup_object to a reachable position, with a random yaw. Scenes without
+        a pickup_object reset their objects (and screw caps) to the initial state."""
+        if mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "pickup_object_free") < 0:
+            self.reset_objects()
+            return
         r = self._rng.uniform(*radius_range)
         a = np.radians(self._rng.uniform(*angle_range_deg))
         yaw = self._rng.uniform(0, np.pi / 2)  # the cube is invariant under 90° rotation
@@ -168,11 +174,194 @@ class SO101Sim:
             ]
         )
 
+    def reset_objects(self) -> None:
+        """Everything but the arm back to the scene's initial state; screw caps screwed."""
+        arm = {self._joint_qpos_adr[n] for n in ALL_JOINTS}
+        for j in range(self.model.njnt):
+            if self.model.jnt_qposadr[j] in arm:
+                continue
+            q, v = self.model.jnt_qposadr[j], self.model.jnt_dofadr[j]
+            kind = int(self.model.jnt_type[j])   # mjtJoint is not an int: compare values
+            nq = {int(mujoco.mjtJoint.mjJNT_FREE): 7, int(mujoco.mjtJoint.mjJNT_BALL): 4}.get(kind, 1)
+            nv = {int(mujoco.mjtJoint.mjJNT_FREE): 6, int(mujoco.mjtJoint.mjJNT_BALL): 3}.get(kind, 1)
+            self.data.qpos[q:q + nq] = self.model.qpos0[q:q + nq]
+            self.data.qvel[v:v + nv] = 0
+        for screw in self._screws:
+            self._engage_screw(screw)
+        for grip in self._grips:
+            self.data.eq_active[grip["eq"]] = 0
+        mujoco.mj_forward(self.model, self.data)
+        for _ in range(200):   # settle
+            mujoco.mj_step(self.model, self.data)
+
+    def get_screw_states(self) -> dict:
+        """{cap: (turns done, "engaged" | "loose" | "free")} — DEBUG/EVALUATION only."""
+        return {s["name"]: (float(self.data.qpos[s["turn_qpos"]]) / (2 * np.pi), s["state"])
+                for s in self._screws}
+
     # -------------------------------------------------------------- private
 
     def _step_sim(self) -> None:
         for _ in range(self.sim_dt_per_step):
             mujoco.mj_step(self.model, self.data)
+            if self._screws:
+                self._update_screws()
+            if self._grips:
+                self._update_grip_assist()
+
+    # Screw caps. A scene declares one with <numeric name="screw:<cap>" data="<turns>"/> and:
+    #   body <cap> with a hinge <cap>_turn and a slide <cap>_lift (relative to the bottle),
+    #   coupled by the equality <cap>_thread (lift = pitch / 2pi * turn),
+    #   body <cap>_free with a freejoint: the same cap once off the bottle.
+    # States: engaged (thread) -> loose after <turns> turns (thread off: it spins and slides
+    # up along the neck freely but stays on it, like a real hollow cap) -> free once lifted
+    # LIFT_OFF above where it came loose: swapped for <cap>_free at the same pose.
+
+    LIFT_OFF = 0.006         # m
+    LOOSE_FRICTION = 0.002   # N m once the thread is out
+
+    def _setup_screws(self) -> None:
+        m = self.model
+        self._screws = []
+        for i in range(m.nnumeric):
+            name = m.numeric(i).name
+            if not name.startswith("screw:"):
+                continue
+            cap = name.removeprefix("screw:")
+            free = m.body(f"{cap}_free")
+            screw = {
+                "name": cap,
+                "turns": float(m.numeric(i).data[0]),
+                "body": m.body(cap).id,
+                "turn_qpos": m.joint(f"{cap}_turn").qposadr[0],
+                "eq": m.equality(f"{cap}_thread").id,
+                "free_qpos": m.joint(f"{cap}_free").qposadr[0],
+                "free_dof": m.joint(f"{cap}_free").dofadr[0],
+                "free_body": free.id,
+                "lift_qpos": m.joint(f"{cap}_lift").qposadr[0],
+                "lift_jnt": m.joint(f"{cap}_lift").id,
+                "turn_jnt": m.joint(f"{cap}_turn").id,
+                "turn_dof": m.joint(f"{cap}_turn").dofadr[0],
+                "lift_range": m.jnt_range[m.joint(f"{cap}_lift").id].copy(),
+                "turn_range": m.jnt_range[m.joint(f"{cap}_turn").id].copy(),
+                "friction": float(m.dof_frictionloss[m.joint(f"{cap}_turn").dofadr[0]]),
+                "geoms": [g for g in range(m.ngeom) if m.geom_bodyid[g] == m.body(cap).id],
+                "free_geoms": [g for g in range(m.ngeom) if m.geom_bodyid[g] == free.id],
+                "state": "engaged",
+            }
+            screw["collision"] = {g: (int(m.geom_contype[g]), int(m.geom_conaffinity[g]))
+                                  for g in screw["geoms"] + screw["free_geoms"]}
+            self._screws.append(screw)
+            self._engage_screw(screw)
+
+    def _set_present(self, screw, geoms, present: bool) -> None:
+        for g in geoms:
+            contype, conaffinity = screw["collision"][g]
+            self.model.geom_contype[g] = contype if present else 0
+            self.model.geom_conaffinity[g] = conaffinity if present else 0
+            self.model.geom_rgba[g, 3] = 1.0 if present else 0.0
+
+    def _engage_screw(self, screw) -> None:
+        m = self.model
+        self._set_present(screw, screw["geoms"], True)
+        self._set_present(screw, screw["free_geoms"], False)
+        m.body_gravcomp[screw["free_body"]] = 1.0   # parked: does not fall
+        m.jnt_range[screw["lift_jnt"]] = screw["lift_range"]
+        m.jnt_range[screw["turn_jnt"]] = screw["turn_range"]
+        m.dof_frictionloss[screw["turn_dof"]] = screw["friction"]
+        self.data.eq_active[screw["eq"]] = 1
+        screw["state"] = "engaged"
+
+    def _update_screws(self) -> None:
+        m, d = self.model, self.data
+        for screw in self._screws:
+            if screw["state"] == "engaged":
+                if d.qpos[screw["turn_qpos"]] < screw["turns"] * 2 * np.pi:
+                    continue
+                # thread out: spins freely, rests on the thread end, can be lifted off
+                lift = float(d.qpos[screw["lift_qpos"]])
+                d.eq_active[screw["eq"]] = 0
+                m.jnt_range[screw["lift_jnt"]] = [lift, lift + 2 * self.LIFT_OFF]
+                m.jnt_range[screw["turn_jnt"]] = [-1e3, 1e3]
+                m.dof_frictionloss[screw["turn_dof"]] = self.LOOSE_FRICTION
+                screw["loose_lift"] = lift
+                screw["state"] = "loose"
+                continue
+            if screw["state"] != "loose" or d.qpos[screw["lift_qpos"]] < screw["loose_lift"] + self.LIFT_OFF:
+                continue
+            q, v = screw["free_qpos"], screw["free_dof"]
+            self.data.qpos[q:q + 3] = self.data.xpos[screw["body"]]
+            self.data.qpos[q + 3:q + 7] = self.data.xquat[screw["body"]]
+            self.data.qvel[v:v + 6] = 0
+            self._set_present(screw, screw["geoms"], False)
+            self._set_present(screw, screw["free_geoms"], True)
+            self.model.body_gravcomp[screw["free_body"]] = 0.0
+            screw["state"] = "free"
+            mujoco.mj_forward(self.model, self.data)   # poses of the free cap, before welding it
+            # held by the grip assist: the free cap stays in the gripper
+            for grip in self._grips:
+                if grip["body"] == screw["body"] and self.data.eq_active[grip["eq"]]:
+                    self.data.eq_active[grip["eq"]] = 0
+                    for other in self._grips:
+                        if other["body"] == screw["free_body"]:
+                            self._weld(other)
+            mujoco.mj_forward(self.model, self.data)
+
+    # Grip assist (stands in for grip pads, simulation only). A scene declares it with
+    # <numeric name="grip_assist:<body>" data="1"/> and a weld <equality> named
+    # grip_<body> between the moving jaw and <body>, inactive (welded to the moving jaw, the
+    # part is pressed against the fixed jaw: the jaws stop at its width, as for real). While the gripper is commanded
+    # closed and both jaws touch <body>, the weld holds it where it is in the gripper;
+    # opening the gripper releases it. MuJoCo's convex-hull jaws otherwise squeeze small
+    # round parts out instead of holding them.
+
+    GRIP_OPEN_PCT = 40.0   # commanded opening above which the grip is released
+
+    def _setup_grip_assist(self) -> None:
+        m = self.model
+        self._grips = []
+        self._jaws = (m.body("gripper").id, m.body("moving_jaw_so101_v1").id)
+        for i in range(m.nnumeric):
+            name = m.numeric(i).name
+            if name.startswith("grip_assist:"):
+                body = name.removeprefix("grip_assist:")
+                self._grips.append({"body": m.body(body).id, "eq": m.equality(f"grip_{body}").id})
+
+    def _weld(self, grip) -> None:
+        """Activates the weld with the current gripper -> body pose."""
+        d = self.data
+        g, b = self.model.eq_obj1id[grip["eq"]], grip["body"]
+        R_g = d.xmat[g].reshape(3, 3)
+        rel_pos = R_g.T @ (d.xpos[b] - d.xpos[g])
+        q_inv = np.zeros(4)
+        mujoco.mju_negQuat(q_inv, d.xquat[g])
+        rel_quat = np.zeros(4)
+        mujoco.mju_mulQuat(rel_quat, q_inv, d.xquat[b])
+        data = self.model.eq_data[grip["eq"]]
+        data[0:3] = 0.0                  # anchor at body2's origin
+        data[3:6] = rel_pos
+        data[6:10] = rel_quat
+        data[10] = 1.0                   # torquescale
+        d.eq_active[grip["eq"]] = 1
+
+    def _update_grip_assist(self) -> None:
+        m, d = self.model, self.data
+        closing = self._gripper_rad_to_pct(d.ctrl[self._actuator_id[GRIPPER]]) < self.GRIP_OPEN_PCT
+        if not closing:
+            for grip in self._grips:
+                d.eq_active[grip["eq"]] = 0
+            return
+        if any(d.eq_active[grip["eq"]] for grip in self._grips):
+            return   # one object at a time
+        for grip in self._grips:   # declaration order = priority (e.g. the cap before the bottle)
+            touching = set()
+            for c in d.contact[:d.ncon]:
+                b1, b2 = m.geom_bodyid[c.geom1], m.geom_bodyid[c.geom2]
+                if grip["body"] in (b1, b2):
+                    touching.add(b2 if b1 == grip["body"] else b1)
+            if all(j in touching for j in self._jaws):
+                self._weld(grip)
+                return
 
     def _gripper_pct_to_rad(self, pct: float) -> float:
         lo, hi = self._gripper_range

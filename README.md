@@ -13,7 +13,7 @@ the real arm, with camera-guided manipulation projects built on top of it.**
 | | Project | Status |
 |---|---|---|
 | 1 | [**Pick & place**](docs/phase1_pick_place.md): a fixed camera finds a cube, the arm drops it in a box, replans if it moves | ✅ Simulation: 28/28 in-view cubes picked |
-| 2 | [**Bottle decapping**](docs/phase2_decap.md): lock a bottle in a fixture, unscrew its cap, sort cap and bottle | 🛠 Design |
+| 2 | [**Bottle decapping**](docs/phase2_decap.md): a printed fixture holds the bottle, the arm unscrews the cap and sorts cap and bottle | 🛠 v1 in simulation: 5/5 |
 | 3 | *to come* | |
 
 ## Highlights
@@ -60,7 +60,8 @@ ros2_ws/src/
 └── tasks/
     ├── so101_pick_place      project 1
     └── so101_decap           project 2
-sim/                          MuJoCo digital twin (same API as the real arm driver)
+hardware/                     printed parts (OpenSCAD, parametric), e.g. the bottle fixture
+sim/                          MuJoCo digital twin (same API as the real arm driver), scene generators
 third_party/lerobot_min/      real arm driver, vendored from LeRobot
 docker/                       control / perception / viz containers
 ```
@@ -79,7 +80,13 @@ cp .env.example .env            # TASK=pick_place, USE_SIM=true
 docker compose up -d --build    # first run: builds the images and the workspace
 
 ../scripts/pick_place_demo.sh --runs 5    # random cube poses, prints the success rate
-../scripts/rviz.sh                        # optional: RViz (xhost +local:docker first)
+```
+
+To watch it, start the simulation with the live MuJoCo window (and optionally RViz):
+
+```bash
+scripts/sim.sh pick_place [--rviz]        # or: scripts/sim.sh decap
+scripts/pick_place_demo.sh                # or: scripts/decap_demo.sh
 ```
 
 By hand, from `docker compose exec control bash`:
@@ -93,7 +100,6 @@ ros2 service call /go_to_target so101_interfaces/srv/GoToTarget \
   "{target_pose: {pose: {position: {x: 0.25, y: 0.0, z: 0.05}}}}"
 ```
 
-Set `SIM_VIEWER=true` in `.env` for a live MuJoCo window.
 
 ## Tests
 

@@ -32,6 +32,6 @@ jobs:
         run: |
           source /opt/ros/jazzy/setup.bash
           cd ros2_ws
-          colcon test --packages-select so101_manipulation so101_vision so101_pick_place \
+          colcon test --packages-select so101_manipulation so101_vision so101_pick_place so101_decap \
             --event-handlers console_direct+ --pytest-args -q
           colcon test-result --verbose

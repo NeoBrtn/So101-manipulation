@@ -24,7 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY third_party/lerobot_min /opt/so101/lerobot_min
 COPY sim /opt/so101/sim
 RUN pip install --break-system-packages --no-cache-dir \
-    "numpy<2" "opencv-python-headless==4.10.*" /opt/so101/lerobot_min /opt/so101/sim
+    "numpy<2" "opencv-python-headless==4.10.*" /opt/so101/lerobot_min \
+ && pip install --break-system-packages --no-cache-dir -e /opt/so101/sim   # editable: the mounted sim/ is used
 
 # The ROS 2 workspace is mounted as a volume (see docker-compose.yml)
 WORKDIR /ros2_ws

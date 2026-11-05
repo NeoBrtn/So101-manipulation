@@ -215,8 +215,12 @@ class DriverNode(rclpy.node.Node):
     def _srv_reset_object(self, request, response):
         with self._sim_lock:
             self._place_object(self._robot)
-        p = self._robot.get_object_position()
-        response.success, response.message = True, f"object at ({p[0]:.3f}, {p[1]:.3f})"
+        response.success = True
+        if mujoco.mj_name2id(self._robot.model, mujoco.mjtObj.mjOBJ_BODY, "pickup_object") >= 0:
+            p = self._robot.get_object_position()
+            response.message = f"object at ({p[0]:.3f}, {p[1]:.3f})"
+        else:
+            response.message = "scene objects reset"
         return response
 
     def _setup_camera(self, hz: float):

@@ -1,16 +1,24 @@
-# Phase 2 parameters (values to be measured on the real setup). See docs/phase2_decap.md.
+# Phase 2 parameters. Robot frame: x forward, y left, z up from the robot base; the
+# table is table_z below it (riser). Bottle heights are from the bottle's bottom.
 decap:
   ros__parameters:
-    min_reach: 0.12
-    max_reach: 0.34
-    move_threshold: 0.015
-    stale_timeout: 1.0
-    neck_grasp_height: 0.0     # m, TCP height on the neck, just below the cap
-    cap_grasp_height: 0.0      # m
-    fixture_pose: [0.0, 0.0, 0.0]
-    cap_box_pose: [0.0, 0.0, 0.0]
-    bottle_box_pose: [0.0, 0.0, 0.0]
-    unscrew_angle: 1.2         # rad of wrist_roll per regrasp step
-    unscrew_lift: 0.001        # m per step (thread pitch)
-    max_unscrew_steps: 8
-    max_retries: 3
+    table_z: -0.18               # riser height (negative)
+    fixture_xy: [0.20, 0.0]      # hardware/bottle_fixture, fixed to the table
+    cap_box_xy: [0.12, -0.22]
+    bottle_box_xy: [0.02, 0.25]
+    # Auchan 50 cl sparkling water bottle (220 mm)
+    cap_center: 0.2135
+    cap_diameter: 0.028
+    neck_center: 0.1975
+    neck_diameter: 0.025
+    # Gripper: the TCP is on the fixed finger; a round part's axis is fixed_jaw_face + d/2
+    # away along TCP x, and the TCP goes grasp_depth below its centre (measured in sim)
+    fixed_jaw_face: 0.004
+    grasp_depth: 0.008
+    # Thread (28 mm PCO 1881): loosened cap
+    thread_pitch: 0.0027
+    unscrew_turns: 1.5
+    stroke_deg: 240.0
+    stroke_time: 6.0             # s per stroke
+    holding_min_pct: 3.0         # gripper below this after closing: nothing in it
+    home_on_start: true
