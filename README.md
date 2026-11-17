@@ -9,14 +9,16 @@ the real arm, with camera-guided manipulation projects built on top of it.**
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 <p align="center">
-  <img src="docs/media/pick_place_sim.gif" alt="Pick & place in the MuJoCo simulation: the arm picks the red cube and drops it in the box" width="600">
-  <br><em>Phase 1, pick &amp; place in the MuJoCo digital twin (camera-guided, no ground truth in the loop)</em>
+  <img src="docs/media/pick_place_sim.gif" alt="Pick & place in the MuJoCo simulation: the arm picks the red cube and drops it in the box" width="49%">
+  <img src="docs/media/decap_sim.gif" alt="Bottle decapping in the MuJoCo simulation: the arm puts the bottle in the fixture, unscrews the cap and sorts cap and bottle" width="49%">
+  <br><em>Left: phase 1, pick &amp; place. Right: phase 2, the bottle is slotted into the printed fixture,
+  uncapped, then cap and bottle are sorted (3× speed). MuJoCo digital twin, camera-guided, no ground truth in the loop.</em>
 </p>
 
 | | Project | Status |
 |---|---|---|
 | 1 | [**Pick & place**](docs/phase1_pick_place.md): a fixed camera finds a cube, the arm drops it in a box, replans if it moves | ✅ Simulation: 28/28 in-view cubes picked |
-| 2 | [**Bottle decapping**](docs/phase2_decap.md): a printed fixture holds the bottle, the arm unscrews the cap and sorts cap and bottle | 🛠 v1 in simulation: 5/5 |
+| 2 | [**Bottle decapping**](docs/phase2_decap.md): the arm finds the bottle, slots it into a printed fixture, unscrews the cap and sorts cap and bottle | 🛠 Simulation: 25/25 runs |
 | 3 | *to come* | |
 
 ## Highlights
