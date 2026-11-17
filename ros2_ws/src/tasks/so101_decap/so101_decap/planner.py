@@ -1,8 +1,13 @@
 """Decapping motion plan (pure Python, no ROS).
 
-Setup (docs/phase2_decap.md): the robot stands on a riser, the bottle in the printed
-fixture at a known pose. Heights below are from the table; the robot frame has the
-table at z = table_z (negative: the riser).
+Setup (docs/phase2_decap.md): the robot stands on a riser, the printed fixture is at a
+known pose on the table, the bottle stands somewhere on the table (found by the camera).
+Heights below are from the table; the robot frame has the table at z = table_z
+(negative: the riser).
+
+    plan_pick(bottle_xy)   neck grasp on the table -> carry -> insertion into the fixture,
+                           with a rotation search (the feet must line up with the ribs)
+    plan()                 from the fixture: unscrew, cap to its box, bottle to its box
 
 Two facts drive the plan:
 
@@ -53,11 +58,36 @@ class DecapConfig:
     cap_drop_height: float = 0.07           # TCP above the table when dropping the cap (box: 4 cm)
     bottle_lift: float = 0.06               # the bottle bottom must clear the fixture (38 mm)
     bottle_place_gap: float = 0.005         # bottle bottom above the box floor when released
+    # pick & insertion
+    pick_lift: float = 0.03                 # off the table, before moving
+    carry_bottom: float = 0.06              # bottle bottom above the table while carried (cup: 38 mm)
+    insert_preload: float = 0.003           # push this much below the seated height
+    search_deg: tuple = (0.0, 12.0, -12.0, 24.0, -24.0, 36.0, -36.0)   # feet/ribs: 72 deg period
     ik_tolerance: float = 0.003
+    min_reach: float = 0.12
+    max_reach: float = 0.30
 
 
 class Unreachable(Exception):
     pass
+
+
+@dataclass
+class Insert:
+    angle_deg: float                        # rotation of the bottle about its axis
+    q: np.ndarray                           # pushing down into the fixture
+    retreat: np.ndarray                     # straight above, after releasing
+
+
+@dataclass
+class PickPlan:
+    neck_pregrasp: np.ndarray
+    neck_grasp: np.ndarray
+    lift: np.ndarray
+    above_fixture: np.ndarray
+    inserts: list[Insert]
+    seated_tcp_z: float                     # TCP height once the bottle is seated
+    info: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -136,6 +166,59 @@ class DecapPlanner:
         x = np.array([np.cos(angle), np.sin(angle), 0.0])
         tcp = np.asarray(center) + (self.cfg.fixed_jaw_face + diameter / 2) * x + [0, 0, -self.cfg.grasp_depth]
         return self.kin.ik_top_down(tcp, seed, x[:2])
+
+    def plan_pick(self, bottle_xy) -> PickPlan:
+        """Neck grasp of the bottle standing at bottle_xy, carry, insertion search."""
+        c = self.cfg
+        if not c.min_reach <= float(np.hypot(*bottle_xy)) <= c.max_reach:
+            raise Unreachable(f"bottle {np.hypot(*bottle_xy) * 100:.0f} cm from the base, outside "
+                              f"[{c.min_reach * 100:.0f}, {c.max_reach * 100:.0f}] cm")
+        neck = np.array([bottle_xy[0], bottle_xy[1], self._z(c.neck_center)])
+        seat = np.array([*c.fixture_xy, self._z(c.fixture_floor + c.neck_center)])
+        carry = np.array([0.0, 0.0, c.carry_bottom - c.fixture_floor])
+        best, failures = None, []
+        for a in np.radians(np.arange(0.0, 360.0, 15.0)):
+            g = self.round_grasp(neck, c.neck_diameter, a)
+            if not g.ok(c.ik_tolerance):
+                continue
+            for dyaw in np.radians([0.0, 30.0, -30.0, 60.0, -60.0, 90.0, -90.0]):
+                try:
+                    plan = self._pick_with(neck, seat, carry, a, a + dyaw, g.q)
+                except Unreachable as e:
+                    failures.append(str(e))
+                    continue
+                margin = min(min(i.q[4] - self.kin.lower[4], self.kin.upper[4] - i.q[4]) for i in plan.inserts)
+                if best is None or margin > best.info["wrist_margin"]:
+                    plan.info["wrist_margin"] = margin
+                    best = plan
+                break
+        if best is None:
+            raise Unreachable(f"no pick/insertion plan for the bottle at {np.round(bottle_xy, 3).tolist()}"
+                              + (f" ({failures[-1]})" if failures else ""))
+        return best
+
+    def _strict(self, center, diameter, angle, seed, name):
+        r = self.round_grasp(center, diameter, angle, seed)
+        if not r.ok(self.cfg.ik_tolerance):
+            raise Unreachable(f"{name}: IK {r.position_error * 1000:.1f} mm off")
+        return r.q
+
+    def _pick_with(self, neck, seat, carry, a_pick, a_seat, q_grasp):
+        c = self.cfg
+        d = c.neck_diameter
+        hover = np.array([0.0, 0.0, c.hover])
+        pre = self._strict(neck + hover, d, a_pick, q_grasp, "above the bottle")
+        lift = self._strict(neck + [0, 0, c.pick_lift], d, a_pick, q_grasp, "pick lift")
+        above = self._strict(seat + carry, d, a_seat, lift, "above the fixture")
+        inserts, q = [], above
+        for deg in c.search_deg:
+            a = a_seat + np.radians(deg)
+            push = self._strict(seat - [0, 0, c.insert_preload], d, a, q, f"insert at {deg:+.0f} deg")
+            retreat = self._strict(seat + hover, d, a, push, "retreat")
+            inserts.append(Insert(deg, push, retreat))
+        seated = self.round_grasp(seat, d, a_seat, above)
+        return PickPlan(pre, q_grasp, lift, above, inserts, float(self.kin.tcp_position(seated.q)[2]),
+                        {"pick_angle_deg": float(np.degrees(a_pick)), "seat_angle_deg": float(np.degrees(a_seat))})
 
     def plan(self) -> DecapPlan:
         c = self.cfg

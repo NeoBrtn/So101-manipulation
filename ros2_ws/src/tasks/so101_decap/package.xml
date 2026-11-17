@@ -2,7 +2,7 @@
 <package format="3">
   <name>so101_decap</name>
   <version>0.2.0</version>
-  <description>Phase 2: detect a bottle, lock it in a fixture, unscrew its cap, sort cap and bottle.</description>
+  <description>Phase 2: find a bottle on the table, put it in a printed fixture, unscrew its cap, sort cap and bottle.</description>
   <maintainer email="neo.burtin@epitech.eu">neo</maintainer>
   <license>Apache-2.0</license>
 
@@ -10,6 +10,10 @@
   <depend>std_msgs</depend>
   <depend>so101_manipulation</depend>
   <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>so101_vision</depend>
   <test_depend>python3-pytest</test_depend>
 
   <export>

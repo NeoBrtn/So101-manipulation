@@ -1,36 +1,43 @@
 #!/usr/bin/env python3
-"""decap_node.py - phase 2: unscrew the cap of a bottle held in the fixture, drop the
-cap in the cap box, then put the bottle in the bottle box.
+"""decap_node.py - phase 2: find the bottle on the table, put it in the fixture, unscrew
+its cap, drop the cap in the cap box, then put the bottle in the bottle box.
 
-v1: the bottle starts in the fixture (placed by hand); picking it up and inserting it
-is v2. The fixture is passive (ribs between the bottle's feet), so there is no
-lock / unlock step. Design: docs/phase2_decap.md.
+The fixture is passive (ribs between the bottle's feet), so there is no lock / unlock
+step. Design: docs/phase2_decap.md.
 
     ros2 service call /decap std_srvs/srv/Trigger
     ros2 topic echo /decap/result
 
-State machine (50 Hz, plan first, then stream; never blocks):
+Inputs: /joint_states, /bottle_position (perception_node). Output: /joint_command only.
 
-    IDLE -(/decap)-> PLAN -> APPROACH_CAP -> GRASP_CAP -> UNSCREW_1 .. UNSCREW_n
-         -> LIFT_CAP -> PLACE_CAP -> APPROACH_NECK -> GRASP_NECK -> LIFT_BOTTLE
-         -> PLACE_BOTTLE -> HOME -> IDLE
-    any failure (unreachable, nothing in the gripper) -> RECOVER -> IDLE
+State machine (50 Hz, plan first, then stream; never blocks on perception):
+
+    IDLE -(/decap)-> DETECT_BOTTLE -> PLAN -> APPROACH_BOTTLE -(moved)-> PLAN
+         -> GRASP_BOTTLE -> LIFT_BOTTLE -> TRANSPORT -> INSERT_1 .. INSERT_n -> RELEASE
+         -> APPROACH_CAP -> GRASP_CAP -> UNSCREW_1 .. UNSCREW_n -> LIFT_CAP -> PLACE_CAP
+         -> APPROACH_NECK -> GRASP_NECK -> REMOVE_BOTTLE -> PLACE_BOTTLE -> HOME -> IDLE
+    any failure (not seen, unreachable, nothing in the gripper, cannot seat) -> RECOVER
+
+Insertion: the bottle's feet must slot between the fixture's ribs, and its yaw is
+unknown. The bottle is pushed down slightly below its seated height; if the arm stays
+higher (FK of the measured joints: the feet rest on the rib tops), the bottle is turned
+about its axis and pushed again, until it drops in (search over the 72 deg pattern).
 
 Every grasp is checked from the gripper position: closed on something, the jaws stop
-before fully closed; closed on nothing, the cap or the bottle was missed or slipped.
-Unscrewing strokes rotate the gripper about the cap axis; between strokes the gripper
-opens, turns back and closes again (the wrist turns ~320 deg at most).
+before fully closed; closed on nothing, the part was missed or slipped.
 """
 import time
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
 import rclpy
 import rclpy.node
+from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-from so101_decap.planner import REST_POSE, DecapConfig, DecapPlanner, Unreachable
+from so101_decap.planner import REST_POSE, DecapConfig, DecapPlanner, Insert, Unreachable
 from so101_manipulation.arm_interface import ArmInterface, spin_node
 from so101_manipulation.kinematics import ArmKinematics
 from so101_manipulation.trajectory import GRIPPER_CLOSED, GRIPPER_OPEN, Waypoint
@@ -38,6 +45,8 @@ from so101_manipulation.trajectory import GRIPPER_CLOSED, GRIPPER_OPEN, Waypoint
 CONTROL_HZ = 50.0
 GRIPPER_TIME = 1.2          # s to open / close
 JOINT_STATES_TIMEOUT = 0.5
+STABLE_SAMPLES = 5          # recent detections that must agree before planning
+STABLE_SPREAD = 0.005       # m
 
 
 @dataclass
@@ -45,6 +54,8 @@ class Step:
     state: str
     waypoints: list
     check_holding: bool = False   # after the motion: the gripper must hold something
+    insert: Insert | None = None  # after the motion: is the bottle seated?
+    watch_bottle: bool = False    # during the motion: replan if the bottle moved
 
 
 class DecapNode(rclpy.node.Node):
@@ -66,23 +77,45 @@ class DecapNode(rclpy.node.Node):
             thread_pitch=p("thread_pitch", d.thread_pitch).value,
             unscrew_turns=p("unscrew_turns", d.unscrew_turns).value,
             stroke_deg=p("stroke_deg", d.stroke_deg).value,
+            carry_bottom=p("carry_bottom", d.carry_bottom).value,
+            insert_preload=p("insert_preload", d.insert_preload).value,
+            min_reach=p("min_reach", d.min_reach).value,
+            max_reach=p("max_reach", d.max_reach).value,
         )
-        self._stroke_time = p("stroke_time", 6.0).value          # s per unscrewing stroke
-        self._holding_min_pct = p("holding_min_pct", 3.0).value  # below: the jaws closed on nothing
+        self._stroke_time = p("stroke_time", 6.0).value           # s per unscrewing stroke
+        self._holding_min_pct = p("holding_min_pct", 3.0).value   # below: the jaws closed on nothing
+        self._seat_tolerance = p("seat_tolerance", 0.004).value   # m above the seated height: not in
+        self._move_threshold = p("move_threshold", 0.015).value   # m: the bottle moved -> replan
+        self._stale_timeout = p("stale_timeout", 1.0).value
+        self._detect_timeout = p("detect_timeout", 10.0).value
+        self._max_retries = p("max_retries", 3).value
         self._home_on_start = p("home_on_start", True).value
 
         self._planner = DecapPlanner(ArmKinematics(), self._cfg)
         self._arm = ArmInterface(self)
+        self._bottle = deque(maxlen=STABLE_SAMPLES)   # (xy, receive time)
+        self._target = None                           # bottle xy the pick plan is based on
+        self._seated_z = 0.0                          # TCP height once the bottle is seated
         self._steps: list[Step] = []
         self._step = None
         self._requested = False
+        self._retries = 0
+        self._failure = ""
         self._state = None
+        self._t_state = time.monotonic()
         self._pub_state = self.create_publisher(String, "~/state", 10)
         self._pub_result = self.create_publisher(String, "~/result", 10)
+        self.create_subscription(PoseStamped, "/bottle_position", self._cb_bottle, 10)
         self.create_service(Trigger, "/decap", self._srv_decap)
         self.create_timer(1.0 / CONTROL_HZ, self._tick)
         self._set_state("INIT")
         self.get_logger().info("Decap ready: ros2 service call /decap std_srvs/srv/Trigger")
+
+    # -- inputs -------------------------------------------------------------------------
+
+    def _cb_bottle(self, msg: PoseStamped):
+        p = msg.pose.position
+        self._bottle.append((np.array([p.x, p.y]), time.monotonic()))
 
     def _srv_decap(self, request, response):
         if self._state != "IDLE":
@@ -92,12 +125,26 @@ class DecapNode(rclpy.node.Node):
         response.success, response.message = True, "decapping started"
         return response
 
+    def _stable_bottle(self):
+        now = time.monotonic()
+        recent = [xy for xy, t in self._bottle if now - t < self._stale_timeout]
+        if len(recent) < STABLE_SAMPLES or np.ptp(recent, axis=0).max() > STABLE_SPREAD:
+            return None
+        return np.mean(recent, axis=0)
+
+    def _latest_bottle(self):
+        if not self._bottle:
+            return None
+        xy, t = self._bottle[-1]
+        return xy if time.monotonic() - t < self._stale_timeout else None
+
     # -- sequencing ---------------------------------------------------------------------
 
     def _set_state(self, state):
         if self._state is not None and state != self._state:
             self.get_logger().info(f"{self._state} -> {state}")
         self._state = state
+        self._t_state = time.monotonic()
         self._pub_state.publish(String(data=state))
 
     def _run(self, steps: list[Step]):
@@ -136,7 +183,21 @@ class DecapNode(rclpy.node.Node):
 
     # -- the sequence -------------------------------------------------------------------
 
-    def _build_steps(self, plan) -> list[Step]:
+    def _pick_steps(self, pick) -> list[Step]:
+        closed, open_ = GRIPPER_CLOSED, GRIPPER_OPEN
+        steps = [
+            Step("APPROACH_BOTTLE", [Waypoint("above the bottle", pick.neck_pregrasp, open_),
+                                     Waypoint("around the neck", pick.neck_grasp, open_)], watch_bottle=True),
+            Step("GRASP_BOTTLE", [Waypoint("close", pick.neck_grasp, closed, GRIPPER_TIME)], check_holding=True),
+            Step("LIFT_BOTTLE", [Waypoint("lift", pick.lift, closed)], check_holding=True),
+            Step("TRANSPORT", [Waypoint("above the fixture", pick.above_fixture, closed)], check_holding=True),
+        ]
+        for i, ins in enumerate(pick.inserts):
+            steps.append(Step(f"INSERT_{i + 1}", [Waypoint(f"push at {ins.angle_deg:+.0f} deg", ins.q, closed)],
+                              insert=ins))
+        return steps
+
+    def _fixture_steps(self, plan) -> list[Step]:
         closed, open_ = GRIPPER_CLOSED, GRIPPER_OPEN
         dt = self._stroke_time / max(1, len(plan.strokes[0].turn))
         steps = [
@@ -146,8 +207,7 @@ class DecapNode(rclpy.node.Node):
         ]
         for i, stroke in enumerate(plan.strokes):
             wps = [Waypoint(f"turn {i + 1}", q, closed, dt) for q in stroke.turn]
-            last = i == len(plan.strokes) - 1
-            if not last:   # regrasp for the next stroke
+            if i < len(plan.strokes) - 1:   # regrasp for the next stroke
                 wps += [Waypoint("open", stroke.turn[-1], open_, GRIPPER_TIME),
                         Waypoint("turn back", stroke.back, open_),
                         Waypoint("close", stroke.back, closed, GRIPPER_TIME)]
@@ -159,7 +219,7 @@ class DecapNode(rclpy.node.Node):
             Step("APPROACH_NECK", [Waypoint("above the neck", plan.neck_pregrasp, open_),
                                    Waypoint("around the neck", plan.neck_grasp, open_)]),
             Step("GRASP_NECK", [Waypoint("close", plan.neck_grasp, closed, GRIPPER_TIME)], check_holding=True),
-            Step("LIFT_BOTTLE", [Waypoint("lift", plan.bottle_lift, closed)], check_holding=True),
+            Step("REMOVE_BOTTLE", [Waypoint("lift", plan.bottle_lift, closed)], check_holding=True),
             Step("PLACE_BOTTLE", [Waypoint("above the bottle box", plan.bottle_above_box, closed),
                                   Waypoint("down", plan.bottle_place, closed),
                                   Waypoint("release", plan.bottle_place, open_, GRIPPER_TIME),
@@ -167,6 +227,29 @@ class DecapNode(rclpy.node.Node):
             Step("HOME", self._rest()),
         ]
         return steps
+
+    def _plan_and_start(self, xy):
+        self._set_state("PLAN")
+        t0 = time.monotonic()
+        try:
+            pick = self._planner.plan_pick(xy)
+            plan = self._planner.plan()
+        except Unreachable as e:
+            self._fail_cycle(f"unreachable: {e}")
+            return
+        self._target = xy
+        self._seated_z = pick.seated_tcp_z
+        self.get_logger().info(
+            f"Bottle at {np.round(xy, 3).tolist()}: planned in {(time.monotonic() - t0) * 1000:.0f} ms "
+            f"({len(pick.inserts)} insertion tries, {plan.info['strokes']} unscrewing strokes)")
+        self._run(self._pick_steps(pick) + self._fixture_steps(plan))
+
+    def _fail_cycle(self, why):
+        self._finish(False, why)
+        self._retries = 0
+        self._set_state("IDLE")
+
+    # -- tick ---------------------------------------------------------------------------
 
     def _tick(self):
         if not self._arm.ready:
@@ -180,50 +263,78 @@ class DecapNode(rclpy.node.Node):
         if self._state == "IDLE":
             if self._requested and self._arm.state_age() < JOINT_STATES_TIMEOUT:
                 self._requested = False
+                self._retries = 0
                 self._arm.hold_current(self._arm.gripper_pct_hint())
-                self._plan_and_start()
+                self._bottle.clear()
+                self._set_state("DETECT_BOTTLE")
             return
         if self._arm.state_age() > JOINT_STATES_TIMEOUT:
             self._arm.streamer.cancel()
-            self._finish(False, f"no /joint_states for {JOINT_STATES_TIMEOUT} s: is the driver running?")
-            self._set_state("IDLE")
+            self._fail_cycle(f"no /joint_states for {JOINT_STATES_TIMEOUT} s: is the driver running?")
             return
 
         done = self._arm.stream()
-        if not done or self._step is None:
+        if self._state == "DETECT_BOTTLE":
+            xy = self._stable_bottle()
+            if xy is not None:
+                self._plan_and_start(xy)
+            elif time.monotonic() - self._t_state > self._detect_timeout:
+                self._fail_cycle("no stable bottle detection (out of the camera view? perception down?)")
             return
         step = self._step
-        if step.check_holding:
+        if step is None:
+            return
+        if step.watch_bottle and not done:
+            xy = self._latest_bottle()
+            if xy is not None and np.linalg.norm(xy - self._target) > self._move_threshold:
+                self._replan(xy)
+            return
+        if not done:
+            return
+
+        if step.check_holding or step.insert is not None:
             pct = self._arm.gripper_pct_hint()
             if pct < self._holding_min_pct:
-                what = "the cap" if "CAP" in step.state or "UNSCREW" in step.state else "the bottle"
-                self._recover(f"{step.state}: gripper closed on nothing ({pct:.1f} %): missed or dropped {what}")
+                self._recover(f"{step.state}: gripper closed on nothing ({pct:.1f} %): missed or dropped the part")
                 return
+        if step.insert is not None:
+            z = self._planner.kin.tcp_position(self._arm.q)[2]
+            above = z - self._seated_z
+            if above < self._seat_tolerance:
+                self.get_logger().info(f"Bottle seated at {step.insert.angle_deg:+.0f} deg.")
+                while self._steps and self._steps[0].insert is not None:
+                    self._steps.pop(0)
+                self._steps.insert(0, Step("RELEASE", [
+                    Waypoint("open", step.insert.q, GRIPPER_OPEN, GRIPPER_TIME),
+                    Waypoint("up", step.insert.retreat, GRIPPER_OPEN)]))
+            elif not (self._steps and self._steps[0].insert is not None):
+                self._recover(f"could not seat the bottle in the fixture ({above * 1000:.0f} mm too high "
+                              "after the whole search)")
+                return
+            else:
+                self.get_logger().info(f"Not seated at {step.insert.angle_deg:+.0f} deg "
+                                       f"({above * 1000:.0f} mm high): turning")
         if self._steps:
             self._next_step()
             return
         # sequence over
         self._step = None
-        if step.state == "INIT":
-            pass
-        elif step.state == "RECOVER":
+        if step.state == "RECOVER":
             self._finish(False, self._failure)
-        else:
-            self._finish(True, "cap in the cap box, bottle in the bottle box")
+        elif step.state != "INIT":
+            self._finish(True, "bottle put in the fixture and uncapped, cap in the cap box, bottle in the bottle box")
         self._set_state("IDLE")
 
-    def _plan_and_start(self):
-        self._set_state("PLAN")
-        t0 = time.monotonic()
-        try:
-            plan = self._planner.plan()
-        except Unreachable as e:
-            self._finish(False, f"unreachable: {e}")
-            self._set_state("IDLE")
+    def _replan(self, xy):
+        self._arm.streamer.cancel()
+        self._retries += 1
+        moved = np.linalg.norm(xy - self._target) * 1000
+        if self._retries > self._max_retries:
+            self._recover(f"the bottle moved ({moved:.0f} mm) too many times")
             return
-        self.get_logger().info(f"Planned in {(time.monotonic() - t0) * 1000:.0f} ms: {plan.info['strokes']} strokes, "
-                               f"wrist roll from {np.degrees(plan.info['wrist_roll_start']):.0f} deg")
-        self._run(self._build_steps(plan))
+        self.get_logger().info(f"Bottle moved by {moved:.0f} mm: replanning (retry {self._retries}).")
+        self._bottle.clear()
+        self._set_state("DETECT_BOTTLE")
 
 
 def main(args=None):

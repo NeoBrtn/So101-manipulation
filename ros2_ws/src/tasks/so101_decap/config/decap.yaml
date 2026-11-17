@@ -21,4 +21,24 @@ decap:
     stroke_deg: 240.0
     stroke_time: 6.0             # s per stroke
     holding_min_pct: 3.0         # gripper below this after closing: nothing in it
+    # Pick and insertion
+    min_reach: 0.12              # m, horizontal base -> bottle
+    max_reach: 0.30
+    move_threshold: 0.015        # m: the bottle moved during the approach -> replan
+    stale_timeout: 1.0
+    detect_timeout: 10.0
+    max_retries: 3
+    carry_bottom: 0.06           # bottle bottom above the table while carried (cup rim: 38 mm)
+    insert_preload: 0.003        # push this far below the seated height
+    seat_tolerance: 0.004        # TCP higher than this above seated: the feet are on the ribs
     home_on_start: true
+
+bottle_perception:
+  ros__parameters:
+    camera: overhead_cam
+    table_z: -0.18
+    cap_top: 0.222               # m, top of the cap above the bottle's bottom
+    # OpenCV HSV (H 0-180), low h s v, high h s v: green cap (sim, and measured on the real one)
+    cap_hsv: [60, 110, 35, 88, 255, 255]
+    min_blob_area: 15
+    publish_hz: 10.0

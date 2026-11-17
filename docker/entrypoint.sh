@@ -6,7 +6,10 @@ set -m  # each background job gets its own process group
 
 source /opt/ros/jazzy/setup.bash
 cd /ros2_ws
+# The other containers wait for this marker: an install/ from a previous build is not enough
+rm -f install/.build_complete
 colcon build --symlink-install --event-handlers console_cohesion- status-
+touch install/.build_complete
 source install/setup.bash
 
 # Serial device nodes for the real arm (the cgroup rule allows them, they must exist)

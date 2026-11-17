@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Generates sim/so101_sim/assets/so101/scene_decap.xml (phase 2: bottle decapping).
 
-Robot on an 18 cm riser (the table is at z = -RISER in the robot frame), the bottle
-standing in the printed fixture (hardware/bottle_fixture/bottle_fixture.scad, same
-dimensions), a cap box and a bottle box on the table.
+Robot on an 18 cm riser (the table is at z = -RISER in the robot frame), the printed
+fixture (hardware/bottle_fixture/bottle_fixture.scad, same dimensions, funnel included),
+a cap box and a bottle box on the table. The bottle stands on the table at a random
+position and yaw (re-drawn by /reset_object), like the phase 1 cube.
 
 The cap is a screw (see SO101Sim's screw caps): a hinge + slide pair coupled by the
 thread pitch, with friction for the tightness. After `turns` turns it is released and
@@ -31,6 +32,13 @@ CUP_H = 0.035
 FEET = 5
 RIB_W, RIB_R_IN, RIB_H = 0.003, 0.014, 0.009   # sim: one box per rib (SCAD: 4 -> 10 mm wedge)
 FLANGE_D, FLANGE_T = 0.110, 0.004
+LEAD_IN, LEAD_IN_H = 0.006, 0.008       # funnel at the opening (SCAD: lead_in, lead_in_h)
+
+# The bottle starts on the table, placed at random like the phase 1 cube (SO101Sim
+# randomize: / keepout:), standing, with a random yaw
+BOTTLE_START = (0.22, 0.13)
+BOTTLE_AREA = (0.16, 0.28, -50.0, 60.0)  # r_min, r_max (m), angle_min, angle_max (deg)
+KEEPOUTS = {"fixture": 0.060, "cap_box": 0.060, "bottle_box": 0.090, "base": 0.090}
 
 # Bottle (Auchan 50 cl, measured from photos): 220 mm tall
 FOOT_R, FOOT_R_IN, FOOT_R_OUT = 0.007, 0.017, 0.023   # radial capsule feet, between the ribs
@@ -61,12 +69,21 @@ def fixture_xml():
     # wall: ring of boxes
     n = 32
     seg = 2 * (inner_r + WALL / 2) * np.tan(np.pi / n) * 1.05
+    wall_h = CUP_H - LEAD_IN_H
+    slope = np.arctan2(LEAD_IN, LEAD_IN_H)           # funnel wall, from vertical
+    slant = np.hypot(LEAD_IN, LEAD_IN_H)
     for i in range(n):
         a = 2 * np.pi * i / n
         r = inner_r + WALL / 2
-        g.append(f'<geom type="box" size="{f(WALL / 2, seg / 2, CUP_H / 2)}" '
-                 f'pos="{f(r * np.cos(a), r * np.sin(a), z0 + FLOOR_T + CUP_H / 2)}" '
+        g.append(f'<geom type="box" size="{f(WALL / 2, seg / 2, wall_h / 2)}" '
+                 f'pos="{f(r * np.cos(a), r * np.sin(a), z0 + FLOOR_T + wall_h / 2)}" '
                  f'euler="0 0 {a:.5f}" material="fixture"/>')
+        # funnel: the same segment, leaning outward (R = Rz(a) Ry(slope))
+        rf = inner_r + LEAD_IN / 2 + WALL / 2 * np.cos(slope)
+        zf = z0 + FLOOR_T + wall_h + LEAD_IN_H / 2
+        q = _quat_zy(a, slope)
+        g.append(f'<geom type="box" size="{f(WALL / 2, seg / 2 * (1 + LEAD_IN / inner_r), slant / 2)}" '
+                 f'pos="{f(rf * np.cos(a), rf * np.sin(a), zf)}" quat="{f(*q)}" material="fixture"/>')
     # ribs
     length = inner_r - RIB_R_IN
     for i in range(FEET):
@@ -81,8 +98,18 @@ def fixture_xml():
         </body>'''
 
 
+def _quat_zy(yaw, pitch):
+    """Quaternion (w x y z) of Rz(yaw) Ry(pitch)."""
+    qz = np.array([np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)])
+    qy = np.array([np.cos(pitch / 2), 0, np.sin(pitch / 2), 0])
+    w1, x1, y1, z1 = qz
+    w2, x2, y2, z2 = qy
+    return (w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2, w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2)
+
+
 def bottle_xml():
-    z0 = -RISER + FLOOR_T
+    z0 = -RISER   # standing on the table
     g = []
     for i in range(FEET):   # feet between the ribs
         a = 2 * np.pi * (i + 0.5) / FEET
@@ -104,7 +131,7 @@ def bottle_xml():
     cap_geom = (f'type="cylinder" size="{f(CAP_R, CAP_H / 2)}" material="bottle_cap" mass="0.003" '
                 f'friction="1.5 0.05 0.001" condim="4" solref="0.004 1" solimp="0.99 0.999 0.0005"')
     body = "\n            ".join(g)
-    return f'''<body name="bottle" pos="{f(*FIXTURE_XY, z0)}">
+    return f'''<body name="bottle" pos="{f(*BOTTLE_START, z0)}">
             <freejoint name="bottle_free"/>
             {body}
             <!-- Screwed cap: turning it (+z, counter-clockwise seen from above) lifts it by the
@@ -155,6 +182,9 @@ def main():
         <numeric name="grip_assist:bottle_cap" data="1"/>
         <numeric name="grip_assist:bottle_cap_free" data="1"/>
         <numeric name="grip_assist:bottle" data="1"/>
+        <!-- Random placement of the bottle on the table, clear of the static objects -->
+        <numeric name="randomize:bottle" data="{f(*BOTTLE_AREA, BOTTLE_D / 2 + 0.005)}"/>
+        {chr(10).join(f'        <numeric name="keepout:{k}" data="{v}"/>' for k, v in KEEPOUTS.items()).lstrip()}
     </custom>
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>

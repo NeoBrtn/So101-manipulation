@@ -64,3 +64,23 @@ def test_bottle_ends_above_the_box(kin, plan):
 def test_fixture_out_of_reach(kin):
     with pytest.raises(Unreachable):
         DecapPlanner(kin, DecapConfig(fixture_xy=(0.45, 0.0))).plan()
+
+
+@pytest.mark.parametrize("xy", [(0.22, 0.13), (0.17, 0.0 + 0.10), (0.26, -0.12), (0.16, 0.20), (0.28, 0.05)])
+def test_pick_and_insertion_plan(kin, xy):
+    cfg = DecapConfig()
+    pick = DecapPlanner(kin).plan_pick(xy)
+    # the bottle's axis ends on the fixture axis at every search angle
+    planner = DecapPlanner(kin)
+    for ins in pick.inserts:
+        axis = kin.tcp_position(ins.q) + planner.held_offset(ins.q, cfg.neck_diameter)
+        assert np.linalg.norm(axis[:2] - cfg.fixture_xy) < 0.003
+    assert len(pick.inserts) == len(cfg.search_deg)
+    # the search covers the 72 deg period of the feet in steps smaller than the ~23 deg window
+    angles = sorted(i.angle_deg for i in pick.inserts)
+    assert angles[-1] - angles[0] >= 72 - 12 and max(np.diff(angles)) <= 12
+
+
+def test_bottle_out_of_reach(kin):
+    with pytest.raises(Unreachable, match="outside"):
+        DecapPlanner(kin).plan_pick((0.40, 0.0))

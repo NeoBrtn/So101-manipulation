@@ -8,6 +8,12 @@
         <numeric name="grip_assist:bottle_cap" data="1"/>
         <numeric name="grip_assist:bottle_cap_free" data="1"/>
         <numeric name="grip_assist:bottle" data="1"/>
+        <!-- Random placement of the bottle on the table, clear of the static objects -->
+        <numeric name="randomize:bottle" data="0.16 0.28 -50 60 0.035"/>
+        <numeric name="keepout:fixture" data="0.06"/>
+        <numeric name="keepout:cap_box" data="0.06"/>
+        <numeric name="keepout:bottle_box" data="0.09"/>
+        <numeric name="keepout:base" data="0.09"/>
     </custom>
     <visual>
         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
@@ -50,45 +56,77 @@
         <body name="fixture" pos="0.2 0 0">
             <geom name="fixture_flange" type="cylinder" size="0.055 0.002" pos="0 0 -0.178" material="fixture"/>
             <geom name="fixture_floor" type="cylinder" size="0.034 0.0015" pos="0 0 -0.1785" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.0325 0 -0.1595" euler="0 0 0.00000" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.031876 0.0063404 -0.1595" euler="0 0 0.19635" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.030026 0.012437 -0.1595" euler="0 0 0.39270" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.027023 0.018056 -0.1595" euler="0 0 0.58905" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.022981 0.022981 -0.1595" euler="0 0 0.78540" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.018056 0.027023 -0.1595" euler="0 0 0.98175" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.012437 0.030026 -0.1595" euler="0 0 1.17810" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.0063404 0.031876 -0.1595" euler="0 0 1.37445" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="1.9901e-18 0.0325 -0.1595" euler="0 0 1.57080" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.0063404 0.031876 -0.1595" euler="0 0 1.76715" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.012437 0.030026 -0.1595" euler="0 0 1.96350" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.018056 0.027023 -0.1595" euler="0 0 2.15984" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.022981 0.022981 -0.1595" euler="0 0 2.35619" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.027023 0.018056 -0.1595" euler="0 0 2.55254" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.030026 0.012437 -0.1595" euler="0 0 2.74889" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.031876 0.0063404 -0.1595" euler="0 0 2.94524" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.0325 3.9801e-18 -0.1595" euler="0 0 3.14159" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.031876 -0.0063404 -0.1595" euler="0 0 3.33794" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.030026 -0.012437 -0.1595" euler="0 0 3.53429" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.027023 -0.018056 -0.1595" euler="0 0 3.73064" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.022981 -0.022981 -0.1595" euler="0 0 3.92699" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.018056 -0.027023 -0.1595" euler="0 0 4.12334" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.012437 -0.030026 -0.1595" euler="0 0 4.31969" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-0.0063404 -0.031876 -0.1595" euler="0 0 4.51604" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="-5.9702e-18 -0.0325 -0.1595" euler="0 0 4.71239" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.0063404 -0.031876 -0.1595" euler="0 0 4.90874" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.012437 -0.030026 -0.1595" euler="0 0 5.10509" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.018056 -0.027023 -0.1595" euler="0 0 5.30144" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.022981 -0.022981 -0.1595" euler="0 0 5.49779" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.027023 -0.018056 -0.1595" euler="0 0 5.69414" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.030026 -0.012437 -0.1595" euler="0 0 5.89049" material="fixture"/>
-            <geom type="box" size="0.0015 0.003361 0.0175" pos="0.031876 -0.0063404 -0.1595" euler="0 0 6.08684" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.0325 0 -0.1635" euler="0 0 0.00000" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.0352 0 -0.146" quat="0.94868 0 0.31623 0" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.031876 0.0063404 -0.1635" euler="0 0 0.19635" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.034524 0.0068672 -0.146" quat="0.94412 -0.030996 0.31471 0.092987" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.030026 0.012437 -0.1635" euler="0 0 0.39270" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.032521 0.01347 -0.146" quat="0.93045 -0.061693 0.31015 0.18508" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.027023 0.018056 -0.1635" euler="0 0 0.58905" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.029268 0.019556 -0.146" quat="0.90783 -0.091796 0.30261 0.27539" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.022981 0.022981 -0.1635" euler="0 0 0.78540" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.02489 0.02489 -0.146" quat="0.87647 -0.12102 0.29216 0.36305" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.018056 0.027023 -0.1635" euler="0 0 0.98175" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.019556 0.029268 -0.146" quat="0.83666 -0.14907 0.27889 0.44721" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.012437 0.030026 -0.1635" euler="0 0 1.17810" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.01347 0.032521 -0.146" quat="0.7888 -0.17569 0.26293 0.52706" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.0063404 0.031876 -0.1635" euler="0 0 1.37445" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.0068672 0.034524 -0.146" quat="0.73334 -0.20061 0.24445 0.60184" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="1.9901e-18 0.0325 -0.1635" euler="0 0 1.57080" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="2.1554e-18 0.0352 -0.146" quat="0.67082 -0.22361 0.22361 0.67082" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.0063404 0.031876 -0.1635" euler="0 0 1.76715" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.0068672 0.034524 -0.146" quat="0.60184 -0.24445 0.20061 0.73334" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.012437 0.030026 -0.1635" euler="0 0 1.96350" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.01347 0.032521 -0.146" quat="0.52706 -0.26293 0.17569 0.7888" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.018056 0.027023 -0.1635" euler="0 0 2.15984" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.019556 0.029268 -0.146" quat="0.44721 -0.27889 0.14907 0.83666" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.022981 0.022981 -0.1635" euler="0 0 2.35619" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.02489 0.02489 -0.146" quat="0.36305 -0.29216 0.12102 0.87647" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.027023 0.018056 -0.1635" euler="0 0 2.55254" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.029268 0.019556 -0.146" quat="0.27539 -0.30261 0.091796 0.90783" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.030026 0.012437 -0.1635" euler="0 0 2.74889" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.032521 0.01347 -0.146" quat="0.18508 -0.31015 0.061693 0.93045" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.031876 0.0063404 -0.1635" euler="0 0 2.94524" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.034524 0.0068672 -0.146" quat="0.092987 -0.31471 0.030996 0.94412" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.0325 3.9801e-18 -0.1635" euler="0 0 3.14159" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.0352 4.3108e-18 -0.146" quat="5.809e-17 -0.31623 1.9363e-17 0.94868" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.031876 -0.0063404 -0.1635" euler="0 0 3.33794" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.034524 -0.0068672 -0.146" quat="-0.092987 -0.31471 -0.030996 0.94412" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.030026 -0.012437 -0.1635" euler="0 0 3.53429" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.032521 -0.01347 -0.146" quat="-0.18508 -0.31015 -0.061693 0.93045" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.027023 -0.018056 -0.1635" euler="0 0 3.73064" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.029268 -0.019556 -0.146" quat="-0.27539 -0.30261 -0.091796 0.90783" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.022981 -0.022981 -0.1635" euler="0 0 3.92699" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.02489 -0.02489 -0.146" quat="-0.36305 -0.29216 -0.12102 0.87647" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.018056 -0.027023 -0.1635" euler="0 0 4.12334" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.019556 -0.029268 -0.146" quat="-0.44721 -0.27889 -0.14907 0.83666" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.012437 -0.030026 -0.1635" euler="0 0 4.31969" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.01347 -0.032521 -0.146" quat="-0.52706 -0.26293 -0.17569 0.7888" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-0.0063404 -0.031876 -0.1635" euler="0 0 4.51604" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-0.0068672 -0.034524 -0.146" quat="-0.60184 -0.24445 -0.20061 0.73334" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="-5.9702e-18 -0.0325 -0.1635" euler="0 0 4.71239" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="-6.4661e-18 -0.0352 -0.146" quat="-0.67082 -0.22361 -0.22361 0.67082" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.0063404 -0.031876 -0.1635" euler="0 0 4.90874" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.0068672 -0.034524 -0.146" quat="-0.73334 -0.20061 -0.24445 0.60184" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.012437 -0.030026 -0.1635" euler="0 0 5.10509" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.01347 -0.032521 -0.146" quat="-0.7888 -0.17569 -0.26293 0.52706" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.018056 -0.027023 -0.1635" euler="0 0 5.30144" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.019556 -0.029268 -0.146" quat="-0.83666 -0.14907 -0.27889 0.44721" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.022981 -0.022981 -0.1635" euler="0 0 5.49779" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.02489 -0.02489 -0.146" quat="-0.87647 -0.12102 -0.29216 0.36305" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.027023 -0.018056 -0.1635" euler="0 0 5.69414" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.029268 -0.019556 -0.146" quat="-0.90783 -0.091796 -0.30261 0.27539" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.030026 -0.012437 -0.1635" euler="0 0 5.89049" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.032521 -0.01347 -0.146" quat="-0.93045 -0.061693 -0.31015 0.18508" material="fixture"/>
+            <geom type="box" size="0.0015 0.003361 0.0135" pos="0.031876 -0.0063404 -0.1635" euler="0 0 6.08684" material="fixture"/>
+            <geom type="box" size="0.0015 0.0040115 0.005" pos="0.034524 -0.0068672 -0.146" quat="-0.94412 -0.030996 -0.31471 0.092987" material="fixture"/>
             <geom name="fixture_rib0" type="box" size="0.0085 0.0015 0.0045" pos="0.0225 0 -0.1725" euler="0 0 0.00000" material="fixture"/>
             <geom name="fixture_rib1" type="box" size="0.0085 0.0015 0.0045" pos="0.0069529 0.021399 -0.1725" euler="0 0 1.25664" material="fixture"/>
             <geom name="fixture_rib2" type="box" size="0.0085 0.0015 0.0045" pos="-0.018203 0.013225 -0.1725" euler="0 0 2.51327" material="fixture"/>
             <geom name="fixture_rib3" type="box" size="0.0085 0.0015 0.0045" pos="-0.018203 -0.013225 -0.1725" euler="0 0 3.76991" material="fixture"/>
             <geom name="fixture_rib4" type="box" size="0.0085 0.0015 0.0045" pos="0.0069529 -0.021399 -0.1725" euler="0 0 5.02655" material="fixture"/>
         </body>
-        <body name="bottle" pos="0.2 0 -0.177">
+        <body name="bottle" pos="0.22 0.13 -0.18">
             <freejoint name="bottle_free"/>
             <geom class="bottle" type="capsule" size="0.007" fromto="0.013753 0.0099923 0.007 0.018607 0.013519 0.007"/>
             <geom class="bottle" type="capsule" size="0.007" fromto="-0.0052533 0.016168 0.007 -0.0071074 0.021874 0.007"/>

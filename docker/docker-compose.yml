@@ -60,12 +60,15 @@ services:
     volumes:
       - ../ros2_ws:/ros2_ws
     networks: [rosnet]
+    depends_on: [control]
+    # waits for the control container's build: it removes install/.build_complete within a
+    # second of starting, and writes it once colcon is done
     command:
       - bash
       - -c
       - >-
-        cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
-        until [ -f install/so101_bringup/share/so101_bringup/package.xml ]; do
+        sleep 3 && cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
+        until [ -f install/.build_complete ]; do
         echo 'waiting for the build (control)...'; sleep 2; done &&
         source install/setup.bash &&
         exec ros2 launch so101_bringup perception.launch.py task:=$${TASK} use_sim:=$${USE_SIM}
@@ -82,8 +85,8 @@ services:
       - bash
       - -c
       - >-
-        cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
-        until [ -f install/so101_description/share/so101_description/launch/viz.launch.py ]; do
+        sleep 3 && cd /ros2_ws && source /opt/ros/jazzy/setup.bash &&
+        until [ -f install/.build_complete ]; do
         echo 'waiting for the build (control)...'; sleep 2; done &&
         source install/setup.bash &&
         exec ros2 launch so101_description viz.launch.py

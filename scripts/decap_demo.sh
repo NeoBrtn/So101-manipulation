@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Phase 2 in the simulation, end to end: starts the stack if needed (TASK=decap,
-# USE_SIM=true), resets the scene (bottle in the fixture, cap on), triggers /decap and
+# USE_SIM=true), resets the scene (bottle at a new random spot, cap on), triggers /decap and
 # waits for the result.
 #
 # Usage: scripts/decap_demo.sh [--runs N] [--rviz] [--viewer]
@@ -35,7 +35,7 @@ call() {   # retried: a short-lived CLI client sometimes misses the response (DD
   return 1
 }
 
-docker compose up -d control viz || exit 1
+docker compose up -d control perception viz || exit 1
 echo "Waiting for the ROS nodes (the first start builds the workspace)..."
 for _ in $(seq 180); do
   if ros "ros2 service list" 2>/dev/null | grep -qx "/decap"; then

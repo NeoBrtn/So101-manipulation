@@ -73,6 +73,12 @@ def main():
     kin = ArmKinematics(URDF)
     sim = SO101Sim(scene_path=ASSETS_DIR / "scene_decap.xml", camera_name="overhead_cam")
     sim.connect()
+    # this check starts from the bottle already in the fixture (the scene puts it on the table)
+    q = sim.model.joint("bottle_free").qposadr[0]
+    sim.data.qpos[q:q + 7] = [*CAP_AXIS, -0.177, 1, 0, 0, 0]
+    sim.data.qvel[:] = 0
+    for _ in range(300):
+        __import__("mujoco").mj_step(sim.model, sim.data)
     if len(sys.argv) > 1:   # experiments: frictionloss damping armature of the cap's turn joint
         dof = sim.model.joint("bottle_cap_turn").dofadr[0]
         fl, dmp, arm_ = map(float, sys.argv[1:4])

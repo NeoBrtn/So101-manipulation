@@ -128,9 +128,11 @@ class SO101Sim:
 
     def randomize_object(self, radius_range=(0.18, 0.30), angle_range_deg=(-50, 60)) -> None:
         """Moves pickup_object to a reachable position, with a random yaw. Scenes without
-        a pickup_object reset their objects (and screw caps) to the initial state."""
+        a pickup_object reset their objects (and screw caps) to the initial state, then place
+        the objects they declare as random (see _randomize_declared)."""
         if mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "pickup_object_free") < 0:
             self.reset_objects()
+            self._randomize_declared()
             return
         r = self._rng.uniform(*radius_range)
         a = np.radians(self._rng.uniform(*angle_range_deg))
@@ -193,6 +195,55 @@ class SO101Sim:
         mujoco.mj_forward(self.model, self.data)
         for _ in range(200):   # settle
             mujoco.mj_step(self.model, self.data)
+
+    def _randomize_declared(self) -> None:
+        """Random placement declared by the scene:
+            <numeric name="randomize:<body>" data="r_min r_max angle_min_deg angle_max_deg radius"/>
+        puts <body> (it needs a freejoint) at a random polar position around the robot base
+        and a random yaw, keeping its height; radius is its footprint. It is kept clear of
+            <numeric name="keepout:<body>" data="radius"/>
+        (static bodies: fixtures, boxes, the robot's riser)."""
+        m, d = self.model, self.data
+        keepouts = []
+        for i in range(m.nnumeric):
+            name = m.numeric(i).name
+            if name.startswith("keepout:"):
+                keepouts.append((d.xpos[m.body(name.removeprefix("keepout:")).id][:2].copy(),
+                                 float(m.numeric(i).data[0])))
+        placed = False
+        for i in range(m.nnumeric):
+            name = m.numeric(i).name
+            if not name.startswith("randomize:"):
+                continue
+            body = m.body(name.removeprefix("randomize:"))
+            r_min, r_max, a_min, a_max, radius = (float(v) for v in m.numeric(i).data[:5])
+            jnt = next(j for j in range(m.njnt) if m.jnt_bodyid[j] == body.id
+                       and m.jnt_type[j] == int(mujoco.mjtJoint.mjJNT_FREE))
+            q = m.jnt_qposadr[jnt]
+            for _ in range(1000):
+                r = self._rng.uniform(r_min, r_max)
+                a = np.radians(self._rng.uniform(a_min, a_max))
+                xy = np.array([r * np.cos(a), r * np.sin(a)])
+                if all(np.linalg.norm(xy - c) > radius + k for c, k in keepouts):
+                    break
+            else:
+                raise RuntimeError(f"no free spot for {body.name}: keep-outs cover its area")
+            yaw = self._rng.uniform(0, 2 * np.pi)
+            d.qpos[q:q + 2] = xy
+            d.qpos[q + 3:q + 7] = [np.cos(yaw / 2), 0, 0, np.sin(yaw / 2)]
+            d.qvel[m.jnt_dofadr[jnt]:m.jnt_dofadr[jnt] + 6] = 0
+            keepouts.append((xy, radius))   # several random objects do not overlap
+            placed = True
+        if placed:
+            mujoco.mj_forward(m, d)
+            for _ in range(200):   # settle
+                mujoco.mj_step(m, d)
+
+    def get_body_pose(self, name: str):
+        """(position, yaw) of a body — DEBUG/EVALUATION only (never in the pipeline)."""
+        b = self.data.body(name)
+        R = b.xmat.reshape(3, 3)
+        return b.xpos.copy(), float(np.arctan2(R[1, 0], R[0, 0]))
 
     def get_screw_states(self) -> dict:
         """{cap: (turns done, "engaged" | "loose" | "free")} — DEBUG/EVALUATION only."""
@@ -315,7 +366,7 @@ class SO101Sim:
     # opening the gripper releases it. MuJoCo's convex-hull jaws otherwise squeeze small
     # round parts out instead of holding them.
 
-    GRIP_OPEN_PCT = 40.0   # commanded opening above which the grip is released
+    GRIP_RELEASE_MARGIN = 0.03   # rad: commanded this much more open than the jaw is -> released
 
     def _setup_grip_assist(self) -> None:
         m = self.model
@@ -346,7 +397,10 @@ class SO101Sim:
 
     def _update_grip_assist(self) -> None:
         m, d = self.model, self.data
-        closing = self._gripper_rad_to_pct(d.ctrl[self._actuator_id[GRIPPER]]) < self.GRIP_OPEN_PCT
+        # Released as soon as the jaws are commanded open beyond where they are: holding on
+        # until some opening threshold would drag the part along with the opening jaw.
+        jaw = d.qpos[self._joint_qpos_adr[GRIPPER]]
+        closing = d.ctrl[self._actuator_id[GRIPPER]] < jaw + self.GRIP_RELEASE_MARGIN
         if not closing:
             for grip in self._grips:
                 d.eq_active[grip["eq"]] = 0

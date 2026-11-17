@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "decap = so101_decap.decap_node:main",
+            "perception = so101_decap.perception_node:main",
         ],
     },
 )
